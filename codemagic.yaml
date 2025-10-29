@@ -1,0 +1,71 @@
+# codemagic.yaml for "تطبيق ماي لايف"
+# ضع هذا الملف في جذر (root) المستودع على GitHub ثم اربطه مع Codemagic
+# ملاحظة: لبناء iOS IPA موقّع ستحتاج إضافة إعدادات code signing (شاهد القسم المعلّق أدناه).
+
+workflows:
+  flutter-workflow:
+    name: Build Flutter Android and iOS
+    # مدة الحد الأقصى للبناء (بالدقائق)
+    max_build_duration: 60
+    # استخدم mac_mini لكي يدعم iOS builds
+    instance_type: mac_mini_m2
+
+    environment:
+      flutter: stable
+      xcode: latest
+      vars:
+        APP_NAME: "تطبيق ماي لايف"
+
+    scripts:
+      - name: Get Flutter packages
+        script: |
+          set -e
+          flutter pub get
+
+      - name: (Optional) Run analyzer
+        script: |
+          # لا تفشل البناء لو فشل analyzer — قم بتعديل || true لو تريد أن يفشل البناء عند الأخطاء
+          flutter analyze || true
+
+      - name: Build Android (release)
+        script: |
+          flutter build apk --release
+
+      - name: Build iOS (archive unsigned)
+        script: |
+          # --no-codesign يبني المشروع بدون توقيع — لإنتاج IPA موقّع تحتاج إعدادات Signing أدناه
+          flutter build ios --release --no-codesign
+
+    artifacts:
+      # ملف الـ APK الناتج
+      - build/app/outputs/flutter-apk/app-release.apk
+      # ملفات iOS الناتجة (تضم .app و/أو .ipa في حال قمت بالتوقيع لاحقًا)
+      - build/ios/iphoneos/*.app
+      - build/ios/ipa/*.ipa
+
+    # قسم النشر بسيط — يمكنك تخصيص النشر عبر email/slack/fastlane لاحقًا
+    publishing:
+      email:
+        recipients:
+          - your-email@example.com
+
+# ------------------------------
+# تعليمات توقيع (Signing) — مثال/مرجع
+# Android (keystore): قم بإضافة keystore في Codemagic UI تحت Code signing
+# ثم اربط المتغيرات التالية (كـ environment variables أو عبر واجهة Codemagic):
+#   ANDROID_KEYSTORE_BASE64 - محتوى keystore مشفر base64
+#   ANDROID_KEYSTORE_PASSWORD
+#   ANDROID_KEY_ALIAS
+#   ANDROID_KEY_PASSWORD
+# مثال إعداد توقيع في قسم scripts إن أردت التوقيع داخل الـ pipeline:
+# - name: Sign Android APK
+#   script: |
+#     echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > my-release-key.jks
+#     $ANDROID_SDK_ROOT/build-tools/*/zipalign -v -p 4 build/app/outputs/flutter-apk/app-release-unsigned.apk app-release.apk
+#     $ANDROID_SDK_ROOT/build-tools/*/apksigner sign --ks my-release-key.jks --ks-key-alias $ANDROID_KEY_ALIAS app-release.apk
+
+# iOS signing:
+# لعمل IPA موقّع، اضف توزيع certificate و provisioning profile في Codemagic (Code signing settings)
+# ثم أزل --no-codesign من أمر build iOS أو استخدم xcodebuild مع إعدادات signing المناسبة.
+
+# انتهى
